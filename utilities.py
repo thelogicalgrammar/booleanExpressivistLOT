@@ -1,246 +1,187 @@
+from functools import reduce, lru_cache
+from types import FunctionType
+from itertools import product
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.special import logsumexp
-from itertools import combinations, chain, tee
-from pprint import pprint
-
-def permutations(size, exclude_min, exclude_max):
-    minimum = int(exclude_min)
-    maximum = int(2**size)-int(exclude_max)
-
-    return np.array([
-        list(f'{x:0{size}b}') 
-        for x in range(minimum, maximum)
-    ]).astype(int)
 
 
-def expand_signal(signal):
-    assert signal[0]<=2, "Signal's first value invalid!"
-    signal_tail = signal[1:]
-    if signal[0]==0:
-        return np.array([[0,0,*signal_tail]])
-    elif signal[0]==1:
-        return np.array([[1,0,*signal_tail],
-                         [0,1,*signal_tail]])
-    else:
-        return np.array([[1,1,*signal_tail]])
+def bit_not(n, numbits=4):
+    return (1<<numbits)-1-n
 
 
-def simplify_lang(language):
-    return np.row_stack([expand_signal(sig) for sig in language])
-
-    
-def create_languages(max_num_signals, add_silence=True):
-    """
-    creates all the languages with length at most 'max length'
-    only excluding the system without any signal
-    """
-    
-    
-    # for each language, the indices of the signals in that language
-    # (a chained version of the combination generators from 1 to max_num_signals)
-    # TODO: this is not elegant, but I use the generator twice
-    permut1, permut2 = tee(chain(*[
-        combinations(np.arange(len(SIGNALS)), up_to)
-        for up_to in range(1, max_num_signals+1)
-    ]))
-
-    language_complexities = np.array([
-        np.sum(COMPLEXITIES[np.array(indices)])
-        for indices in permut1
-    ])
-
-    # synthetic because it's still using the 0/1/2 notation
-    # for the first element
-    languages = [
-        simplify_lang(SIGNALS[np.array(indices)])
-        # signals[np.array(indices)]
-        for indices in permut2
-    ]
-
-    if add_silence:
-        # also add the silence signal to every language
-        languages = np.array([
-            np.row_stack(([[1, 1, 1, 1]], language))
-            for language in languages
-        ])
-
-    return languages, language_complexities
+def get_indentation_levels(formula):
+    formula_np = np.array(list(formula))
+    position_closed = formula_np==')'
+    formula_open = formula_np == '('
+    formula_close = np.where(position_closed,-1,0)
+    formula_level = (formula_close+formula_open).cumsum()
+    brackets_position = formula_open | position_closed
+    formula_without_brackets = formula_np[~brackets_position]
+    formula_level_without_brackets = formula_level[~brackets_position]
+    return formula_without_brackets, formula_level_without_brackets
 
 
-def log_softmax(inputarray, alpha, axis=-1):
-    array = np.array(inputarray) * alpha
-    e_x = np.where(
-        array == -np.inf,
-        0, np.exp(array - np.max(array, axis=axis, keepdims=True))
-    )
-    return np.log(e_x / np.sum(e_x, axis=axis, keepdims=True))
+def np_to_string(f):
+    return f.astype('|S1').tostring().decode('utf-8')
 
 
-def lognormalize(array, axis=1):
-    a = logsumexp(array, axis=axis, keepdims=True)
-    return array - a
-
-
-def softmax(array, alpha, axis=0):
-    unnorm = np.exp(alpha*array)
-    return normalize(unnorm, axis=axis)
-
-
-def normalize(array, axis):
-    return array / np.sum(array, axis=axis, keepdims=True)
-
-
-def random_choice_prob_index(a, axis=1):
-    """
-    copied this from a stackoverflow question
-    'vectorizing np.random.choice for given 2d array of probabilities
-    along axis'
-    """
-    r = np.expand_dims(np.random.rand(a.shape[1-axis]), axis=axis)
-    return (a.cumsum(axis=axis) > r).argmax(axis=axis)
-
-
-def calculate_logprob_production(alpha, observations, languages):
+def separate(f,levs):
     """
     Parameters
     ----------
-    observations: array
-        Array with shape (# observations, 4)
+    f: array
+        np array of characters representing the formula
+    levs: array
+        Int array of the nesting level of f
+        Where argument levels is shifted down so it starts from 0
     Returns
     -------
-    list
-        A list with # languages len, each element 
-        is an array with shape (#observations, # signal
+    list of lists
+        Each list contains a tuple (argument f array, argument levels)
     """
-
-    logprobs_production = []
-    for language in languages:
-
-        # list with shape (# languages, # observations, 
-        # # signals in that language, 4)
-        # which says for each combination of signal and observation
-        # if the signal is incompatible with the observation (-1)
-        # compatible with the observation (0)
-        # or compatible but not observed (1)
-        # print("1: ", language[None].shape)
-        # print("2: ", observations[:,None].shape)
-        diff = language[None] - observations[:,None]
-
-        # those signal/obs combos that are incompatible
-        # get distance inf
-        # shape (# observations, # signals)
-
-        difference_temp = np.where(
-            np.any(diff==-1, axis=2),
-            np.inf,
-            np.sum(diff, axis=2)
-        )
-
-        # shape (# observations, # signals)
-        logprobs_production.append(
-            log_softmax(difference_temp, alpha=-0.5, axis=1)
-        )
-    return logprobs_production
+    assert len(f)==len(levs), 'formula and scope have different lens'
+    # one comma for every argument in main scope.
+    # possibly 0, e.g. for negation
+    mask_commas_in_main = (f==',')&(levs==0)
+    indices_commas_in_main = np.argwhere(mask_commas_in_main).flatten()
+    # f without commas in main scope
+    f_without_commas = f[~mask_commas_in_main]
+    f_separated = np.split(f_without_commas, indices_commas_in_main)
+    levs_without_commas = levs[~mask_commas_in_main]
+    levs_separated = np.split(levs_without_commas, indices_commas_in_main)
+    return zip(f_separated, levs_separated)
 
 
-def speaker(language, num_observations, alpha=-3):
+# TODO: wrap this in a decorator that simplifies e.g. exhcnages of p and q
+# @lru_cache(maxsize=None)
+def eval_formula_recursive(f_wo_brackets, level_wo_brackets, m_dict):
+    # if it's a basic formula, return its meaning
+    if np.all(level_wo_brackets==0):
+        return m_dict[np_to_string(f_wo_brackets)]
+
+    # if it's not a basic formula, run this function 
+    # on its components and then combine the meanings
+    operator = np_to_string(f_wo_brackets[level_wo_brackets==0])
+    operator_m = m_dict[operator]
+
+    # split the arguments
+    inner_indices = level_wo_brackets > 0
+    arguments_tuples = separate(
+        f_wo_brackets[inner_indices],
+        level_wo_brackets[inner_indices]-1) 
+
+    # run the function on the arguments
+    args_meanings = [
+        eval_formula_recursive(f,lev,m_dict)
+        for f, lev in arguments_tuples]
+
+    return operator_m(*args_meanings)
+
+
+def evaluate_formula(formula,m_dict):
     """
-    Parameters
-    ----------
-    language: array
-        An array with shape (# signals, 4) modelling a single language
-    num_observations: int
-        And int specifying how many observations the speaker has to make
-    alpha: float
-        Strength of tendency for precise knowledge
+    The assumption is that the formulas have shape
+        OP(formula,formula)
+    NOTE: no spaces
+    If a formula contains brackets, it should be analysed further
+    Otherwise it's a basic expression
     """
-    
-    number_covered_areas = np.sum(SIGNALS_EXPANDED, axis=1)
-
-    observations_logprobs = log_softmax(
-        number_covered_areas, alpha, axis=0
-    )
-
-    observations_indices = np.random.choice(
-        len(SIGNALS_EXPANDED),
-        size=num_observations, 
-        p=np.exp(observations_logprobs)
-    )
-
-    observations = SIGNALS_EXPANDED[observations_indices]
-
-    logprobabilities_production = logprob_production(
-        alpha=alpha,
-        observations=observations,
-        languages=language[None]
-    )
-
-    # choose one signal for each row of probabilities_production
-    choices_indices = random_choice_prob_index(
-        np.exp(logprobabilities_production), axis=1
-    )
-
-    return observations, logprobabilities_production, choices_indices
+    # find the nesting level of every character in the formula
+    f_wo_brackets, level_wo_brackets = get_indentation_levels(formula)
+    return eval_formula_recursive(
+        f_wo_brackets, level_wo_brackets, m_dict) 
 
 
-def learner(observations, probabilities_production, choices_indices, prior):
+def combine(f_1, f_2):
     """
-    Parameters
-    ----------
-    observations: array
-        1d array with the observations
-    probabilities_production: list of arrays
-        list containing for each language 
-        a 2d array with shape (# observations, # signals)
-        containing the probability that the speaker
-        would produce each signal given each observation in 'observations'
-    choices_indices: array
-        1d array with the indices of the signals that the speaker 
+    Substitute the first argument in f_1 for f_2
     """
-    # 
+    return f_1.replace('_',f_2,1)
 
-# creates all possible boolean strings of length 4, 
-# excluding the degenerate ones
-# the 4 elements are: p-q, q-p, p&q, not(p or q)
-# signals = permutations(4, True, True)
+def compose(m_1, m_2):
+    """
+    This function puts m_2 in place of the first argument of m_1
+    m_1 is a function 
+    """
+    if type(m_2) == FunctionType:
+        n_args = m_2.__code__.co_argcount
+        if n_args == 1:
+            pass
+        elif n_args == 2:
+            pass
+        
 
-# the first element indicates the number of 1s
-# in the first two elements (if 1, the message should
-# split into (0, 1, ..) and (1, 0, ..)
-SIGNALS, COMPLEXITIES = zip(
-    ([0, 0, 1], 5), 
-    ([0, 1, 0], 7),
-    ([0, 1, 1], 21),
-    ([1, 0, 0], 7),
-    ([1, 0, 1], 3),
-    ([1, 1, 0], 3),
-    ([1, 1, 1], 11),
-    #  these four are
-    # 'reflections' (from the pow of p and q)
-    # of the previous four
-    # ([1, 0, 0, 0], 7),
-    # ([1, 0, 0, 1], 3),
-    # ([1, 0, 1, 0], 3),
-    # ([1, 0, 1, 1], 11),
-    ([2, 0, 0], 17), 
-    ([2, 0, 1], 11), 
-    ([2, 1, 0], 5)
-)
+def find_shortest_formulas(saturated, unsaturated, m_dict):
+    """
+    Since formulas are added to saturated in order of complexity,
+    whenever I encounter a meaning that's already in 
+    saturated, I don't need to add it to saturated
+    Because the new meaning is going to be at least
+    as complex as the one that's already in saturated
+    Otherwise, add to saturated
+    NOTE: this relies on the fact that the shortest
+    formula for a meaning is a combination of shortest formulas 
+    NOTE: lexicon should contain first p and q, and then
+    the other terms in order of complexity
+    """
+    # store the formulas and meanings for 
+    # each of the unique expressions
+    unique_formulas = [*saturated]
+    unique_meanings = [m_dict[f] for f in saturated]
+    lexicon = [*saturated, *unsaturated]
+    # start with just the initial unsaturated in it
+    # unsaturated terminal nodes
+    terminal_nodes = [*unsaturated]
+    while len(unique_meanings) < 16:
+        new_nodes = []
+        # loop through the terminal nodes
+        for current_node in terminal_nodes:
+            # loop through the lexicon
+            # and try to add each of the saturated
+            for m in lexicon:
+                new_node = combine(current_node, m)
+                # when encountering a saturated node, 
+                # check if it is in unique already
+                if '_' in new_node:  
+                    new_node_meaning = evaluate_formula(new_node,m_dict)
+                    if new_node_meaning not in unique_meanings:
+                        unique_formulas.append(new_node)
+                        unique_meanings.append(new_node_meaning)
+                else:
+                    new_nodes.append(new_node)
+        terminal_nodes = new_nodes
+    return [f'{x:04b}' for x in unique_meanings], unique_formulas
 
-SIGNALS = np.array(SIGNALS)
-SIGNALS_EXPANDED = np.array(simplify_lang(SIGNALS))
-COMPLEXITIES = np.array(COMPLEXITIES)
 
-languages, language_complexities = create_languages(5) 
-# speaker(languages[10], 4)
-observations_possible = permutations(
-        4, exclude_min=True, exclude_max=False)
-print(observations_possible.shape)
-probs = [
-    np.exp(x) for x in calculate_logprob_production(
-        3,
-        observations=observations_possible,
-        languages=languages
-)]
-pprint(probs)
+def from_dict_to_unsaturated(m_dict):
+    saturated, unsaturated = [], []
+    for k,v in m_dict.items():
+        if type(v)==FunctionType:
+            unsaturated.append(
+                k + '(' + ','.join(['_']*v.__code__.co_argcount) + ')')
+        else:
+            saturated.append(k)
+    return saturated, unsaturated
+
+
+if __name__=='__main__':
+
+    m_dict = {
+        'p': 0b1100,
+        'q': 0b1010,
+        # 'or': lambda x,y: x|y,
+        # 'and': lambda x,y: x&y,
+        # 'not': lambda x: bit_not(x),
+        'nand': lambda x,y:bit_not(x&y)
+    }
+    saturated, unsaturated = from_dict_to_unsaturated(m_dict)
+    # saturated = ['p','q']
+    # unsaturated = [
+    #     'or(_,_)',
+    #     'and(_,_)',
+    #     'not(_)'
+    # ]
+
+    # print(bin(evaluate_formula('or(not(p),q)', m_dict)))
+    print(np.column_stack(
+        find_shortest_formulas(saturated, unsaturated, m_dict)
+    ))
