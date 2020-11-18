@@ -36,7 +36,7 @@ def compose(m_1, m_2):
         n_args_m2 = find_n_args(m_2)
         # htere I'm being very explicit but there's probably
         # a much more elegant way
-        if n_args_m1 == 1 and n_args_m2 == 2:
+        elif n_args_m1 == 1 and n_args_m2 == 2:
             return lambda x: lambda y: m_1(m_2(x)(y))
         elif n_args_m1 == 2 and n_args_m2 == 2:
             return lambda x: lambda y: lambda z: m1(m2(y)(z))(x)
