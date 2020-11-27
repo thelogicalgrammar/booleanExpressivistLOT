@@ -1,15 +1,21 @@
+import numpy as np
 
 
-def get_indentation_levels(formula):
-    formula_np = np.array(list(formula))
+def get_indentation_levels(formula, exclude_brackets):
+    if type(formula)==str:
+        formula_np = np.array(list(formula)) 
     position_closed = formula_np==')'
-    formula_open = formula_np == '('
-    formula_close = np.where(position_closed,-1,0)
+    formula_open = formula_np=='('
+    formula_close = np.zeros(len(position_closed))
+    formula_close[1:] = (np.where(position_closed,-1,0))[:-1]
     formula_level = (formula_close+formula_open).cumsum()
-    brackets_position = formula_open | position_closed
-    formula_without_brackets = formula_np[~brackets_position]
-    formula_level_without_brackets = formula_level[~brackets_position]
-    return formula_without_brackets, formula_level_without_brackets
+    if exclude_brackets:
+        brackets_position = formula_open | position_closed
+        formula_without_brackets = formula_np[~brackets_position]
+        formula_level_without_brackets = formula_level[~brackets_position]
+        return formula_without_brackets, formula_level_without_brackets
+    else:
+        return formula_np, formula_level
 
 
 def np_to_string(f):
@@ -78,7 +84,10 @@ def evaluate_formula(formula,m_dict):
     Otherwise it's a basic expression
     """
     # find the nesting level of every character in the formula
-    f_wo_brackets, level_wo_brackets = get_indentation_levels(formula)
+    f_wo_brackets, level_wo_brackets = get_indentation_levels(formula,True)
     return eval_formula_recursive(
-        f_wo_brackets, level_wo_brackets, m_dict) 
+        f_wo_brackets,
+        level_wo_brackets,
+        m_dict
+    ) 
 
