@@ -248,6 +248,12 @@ def calculate_expected_complexity(dict_complete):
     Calculates expected complexity for each lang,
     where complexity is calculated as the number of operations 
     in the formula, found as the number of '('.
+
+    Parameters
+    ----------
+    dict_complete: dict
+        Dictionary where each key is a tuple (or ordered dict) of primitives
+        and each value is 
     """
     expected_complexity_dict = {}
     for tuple_primitives, shortest_defs in dict_complete.items():
@@ -258,18 +264,34 @@ def calculate_expected_complexity(dict_complete):
 
 
 def calculate_language_complexity(lang_dict):
+
+    negation_cost = 1
     complexities = {
+        'not': 1 + negation_cost,
         'and': 1,
         'or': 1,
-        'nor': 1,
-        'nand': 2,
-        'XOR': 3,
+        'nor': 1 + 2*negation_cost,
+        'nand': 2 + 2*negation_cost,
+        'XOR': 3 + negation_cost,
         'bc': 3,
-        'c': 2,
-        'ic': 2,
-        'nc': 1,
-        'nic': 1
+        'c': 2 + negation_cost,
+        'ic': 2 + negation_cost,
+        'nc': 1 + negation_cost,
+        'nic': 1 + negation_cost
     }
+    # complexities = {
+    #     'not': 1,
+    #     'and': 1,
+    #     'or': 1,
+    #     'nor': 1,
+    #     'nand': 2,
+    #     'XOR': 3,
+    #     'bc': 3,
+    #     'c': 2,
+    #     'ic': 2,
+    #     'nc': 1,
+    #     'nic': 1
+    # }
 
     complexity = {
         key: sum([complexities[k] for k in key])
@@ -277,6 +299,34 @@ def calculate_language_complexity(lang_dict):
     }
 
     return complexity
+
+
+def save_languages(langs_formatted, path='functionally_complete'):
+    with open(f'{path}.txt', 'w', newline='\n') as openfile:
+        openfile.write(langs_formatted)
+
+
+def update_languages_file(
+        file_path='functionally_complete',
+        folder_path='minimal_formulas'):
+    """
+    Parameters
+    ----------
+    file_path: str
+        Path to the file containing the list of functionally complete languages
+        which should be updated
+    folder_path: str
+        Path to the folder containing the pickle files with the minimal formulas
+    """
+    with open(f'{file_path}.txt', 'r') as openfile:
+        currently_stored = [s.strip() for s in openfile]
+    remaining_langs = [
+        lang for lang in currently_stored
+        if not os.path.isfile(f'{folder_path}/{lang}.pickle')
+    ]
+    print(remaining_langs)
+    langs_formatted = '\n'.join(remaining_langs)
+    save_languages(langs_formatted, file_path)
 
 
 if __name__=='__main__':
@@ -310,7 +360,11 @@ if __name__=='__main__':
     parser.add_argument(
         '--action',
         type=str,
-        help='What to do. Either "single_minimal" or "all_minimal" or "save_functionally_complete"'
+        help=(
+            'What to do. Either "single_minimal" or "all_minimal"'
+            'or "save_functionally_complete"'
+            'or "update_languages_file"'
+            )
     )
 
     args = parser.parse_args()
@@ -336,25 +390,13 @@ if __name__=='__main__':
             shortest = find_shortest_formulas(m_dict_restricted)
             with open(file_path, 'wb') as openfile:
                 pickle.dump(shortest, openfile)
-
+    
     elif args.action == 'save_functionally_complete':
         complete_langs = calculate_functionally_complete()
         langs_formatted = '\n'.join([
             '_'.join(a) for a in complete_langs
         ])
-        with open('functionally_complete.txt', 'w') as openfile:
-            openfile.write(langs_formatted)
-    
-    # for name in dict_complete.keys():
-    #     complex_1 = dict_complexities_1[name]
-    #     complex_3 = dict_complexities_3[name]
-    #     print(complex_1, complex_3, ','.join(name))
-    #     plt.text(
-    #         complex_1,
-    #         complex_3,
-    #         s=','.join(name)
-    #     )
-    # plt.xlim(0, 8)
-    # plt.ylim(0, 3)
-    # plt.show()
+        save_languages(langs_formatted)
 
+    elif args.action == 'update_languages_file':
+        update_languages_file()
