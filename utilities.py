@@ -264,20 +264,35 @@ def calculate_expected_complexity(dict_complete):
 
 
 def calculate_language_complexity(lang_dict):
-
+    # negation_cost = 1
+    # complexities = {
+    #     'not': 1 + negation_cost,
+    #     'and': 1,
+    #     'or': 1,
+    #     'nor': 1 + 2*negation_cost,
+    #     'nand': 2 + 2*negation_cost,
+    #     'XOR': 3 + negation_cost,
+    #     'bc': 3,
+    #     'c': 2 + negation_cost,
+    #     'ic': 2 + negation_cost,
+    #     'nc': 1 + negation_cost,
+    #     'nic': 1 + negation_cost
+    # }
+    homogeneity_cost = 1
     negation_cost = 1
+    globality_cost = 1
     complexities = {
-        'not': 1 + negation_cost,
-        'and': 1,
-        'or': 1,
-        'nor': 1 + 2*negation_cost,
-        'nand': 2 + 2*negation_cost,
-        'XOR': 3 + negation_cost,
-        'bc': 3,
-        'c': 2 + negation_cost,
-        'ic': 2 + negation_cost,
-        'nc': 1 + negation_cost,
-        'nic': 1 + negation_cost
+        'not': negation_cost,
+        'and': 0,
+        'or': 0,
+        'nor': negation_cost,
+        'nand': globality_cost + negation_cost + homogeneity_cost,
+        'XOR': globality_cost + negation_cost + homogeneity_cost,
+        'bc': globality_cost + negation_cost + homogeneity_cost,
+        'c': globality_cost + negation_cost + homogeneity_cost,
+        'ic': globality_cost + negation_cost + homogeneity_cost,
+        'nc': negation_cost + homogeneity_cost,
+        'nic': negation_cost + homogeneity_cost
     }
     # complexities = {
     #     'not': 1,

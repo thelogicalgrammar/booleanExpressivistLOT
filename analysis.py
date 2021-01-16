@@ -19,8 +19,9 @@ def plot_languages(dict_complexities_1, dict_complexities_3):
     fig, ax = plt.subplots()
     for name in dict_complexities_1.keys():
 
-        if not any([i in ['nc', 'nic', 'bc', 'XOR', 'c', 'ic'] for i in name]) and 'not' in name:
-        # if 'not' in name:
+        # if not any([i in ['nc', 'nic', 'bc', 'XOR', 'c', 'ic'] for i in name]) and 'not' in name:
+        if 'not' in name:
+        # if True:
 
             complex_1 = dict_complexities_1[name]
             complex_3 = dict_complexities_3[name]
@@ -43,14 +44,15 @@ def plot_languages(dict_complexities_1, dict_complexities_3):
 #                 color=color,
 #                 zorder=zorder
 #             )
-            ax.text(
-                complex_1,
-                complex_3,
-                s=','.join(name),
-                fontsize='xx-small',
-                rotation=90,
-                color=color
-            )
+            # ax.text(
+            #     complex_1,
+            #     complex_3,
+            #     s=','.join(name),
+            #     fontsize='xx-small',
+            #     rotation=90,
+            #     color=color
+            # )
+            ax.scatter(complex_1,complex_3,color=color)
 
     ax.set_xlim(0,3)
     ax.set_ylim(0,12)
@@ -77,4 +79,5 @@ languages = get_minimal_languages('minimal_formulas')
 
 dict_complexities_1 = calculate_expected_complexity(languages)
 dict_complexities_3 = calculate_language_complexity(languages)
+
 plot_languages(dict_complexities_1, dict_complexities_3)
