@@ -7,8 +7,10 @@ from pickle import load
 from utilities import calculate_expected_complexity, calculate_language_complexity
 
 
-def plot_languages(dict_complexities_1, dict_complexities_3):
-
+def plot_languages(dict_usage_complexities, dict_cognitive_complexity):
+    """
+    Plot the languages stored in the dictionaries
+    """
     attested_languages = (
         frozenset(['nor', 'and', 'or', 'not']),
         frozenset(['and', 'or', 'not']),
@@ -16,48 +18,54 @@ def plot_languages(dict_complexities_1, dict_complexities_3):
         frozenset(['or', 'not']),
     )
 
-    fig, ax = plt.subplots()
-    for name in dict_complexities_1.keys():
+    fig, ax = plt.subplots(figsize=(8.27,4))
+    for name in dict_usage_complexities.keys():
 
         # if not any([i in ['nc', 'nic', 'bc', 'XOR', 'c', 'ic'] for i in name]) and 'not' in name:
         if 'not' in name:
         # if True:
 
-            complex_1 = dict_complexities_1[name]
-            complex_3 = dict_complexities_3[name]
+            usage_complexity = dict_usage_complexities[name]
+            cognitive_complexity = dict_cognitive_complexity[name]
 
             if name in attested_languages:
                 color = 'red'
                 zorder = 10
-                # ax.text(
-                #     complex_1, complex_3,
-                #     s=','.join(name),
-                #     fontsize='xx-small'
-                # )
+                if name == frozenset(['or', 'not']):
+                    yshift = 0.4
+                else:
+                    yshift = 0
+                ax.text(
+                    usage_complexity + 0.02,
+                    cognitive_complexity + 0.3 + yshift,
+                    s=','.join(name),
+                    fontsize='x-small'
+                )
             else:
                 color='black'
                 zorder = 1
 
 #             ax.scatter(
-#                 complex_1,
-#                 complex_3,
+                  # usage_complexity, cognitive_complexity,
 #                 color=color,
 #                 zorder=zorder
 #             )
             # ax.text(
-            #     complex_1,
-            #     complex_3,
+                  # usage_complexity, cognitive_complexity,
             #     s=','.join(name),
             #     fontsize='xx-small',
             #     rotation=90,
             #     color=color
             # )
-            ax.scatter(complex_1,complex_3,color=color)
+            ax.scatter(usage_complexity,cognitive_complexity,color=color)
 
-    ax.set_xlim(0,3)
-    ax.set_ylim(0,12)
+    ax.set_xlabel('Usage complexity')
+    ax.set_ylabel('Conceptual complexity')
+    # ax.set_xlim(0,3)
+    ax.set_xlim(1.05,2.8)
 
-    plt.show()
+    # plt.show()
+    plt.savefig('figure.png', dpi=300, transparent=True)
 
 
 def get_minimal_languages(folder):
@@ -77,7 +85,15 @@ def get_minimal_languages(folder):
 
 languages = get_minimal_languages('minimal_formulas')
 
-dict_complexities_1 = calculate_expected_complexity(languages)
-dict_complexities_3 = calculate_language_complexity(languages)
+dict_usage_complexity = calculate_expected_complexity(languages)
+dict_cognitive_complexity = calculate_language_complexity(languages)
 
-plot_languages(dict_complexities_1, dict_complexities_3)
+# print(calculate_expected_complexity(languages)[frozenset({'not', 'and'})])
+# pprint(
+#     sorted(
+#         languages[frozenset({'not', 'or', 'and', 'nor'})],
+#         key=lambda x: x[0]
+#     )
+# )
+print(len([a for a in languages.keys() if 'not' in a]))
+# plot_languages(dict_usage_complexity, dict_cognitive_complexity)

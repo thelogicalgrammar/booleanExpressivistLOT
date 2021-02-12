@@ -86,7 +86,7 @@ def check_symmetry(new_node, new_nodes, pivot):
     return np_to_string(flipped_node) in new_nodes
 
 
-def find_shortest_formulas(m_dict):
+def find_shortest_formulas(m_dict, nesting_limit=7):
     """
     Since formulas are added to saturated in order of complexity,
     whenever I encounter a meaning that's already in 
@@ -98,6 +98,9 @@ def find_shortest_formulas(m_dict):
     formula for a meaning is a combination of shortest formulas 
     NOTE: lexicon should contain first p and q, and then
     the other terms in order of complexity
+    NOTE: the nesting_limit e.g. =7 means that it will
+    only calculate formulas up to 7 and make 'fake'
+    formulas of length 8 for everything else
     """
     saturated, saturated_m, unsaturated, unsaturated_m = [], [], [], []
     for k,v in m_dict.items():
@@ -172,6 +175,17 @@ def find_shortest_formulas(m_dict):
         # new_nodes, new_m = reduce_symmetric_operators(new_nodes, new_m)
         terminal_nodes = new_nodes
         print(len(terminal_nodes),'')
+        print('len of last: ', terminal_nodes[-1].count('('))
+        # print(unique_formulas, '\n')
+        # print(terminal_nodes[0])
+        # this if means that it has calculated all the formulas up to and including
+        # the formulas of length nesting_limit
+        if terminal_nodes[-1].count('(') == nesting_limit:
+            n_remaining = 16 - len(unique_formulas)
+            unique_meanings += [-0000]*n_remaining
+            unique_formulas += ['('*(nesting_limit+1)]*n_remaining
+            print(unique_formulas, '\n')
+
     return [f'{x:04b}' for x in unique_meanings], unique_formulas
 
 
@@ -264,6 +278,7 @@ def calculate_expected_complexity(dict_complete):
 
 
 def calculate_language_complexity(lang_dict):
+    """
     # negation_cost = 1
     # complexities = {
     #     'not': 1 + negation_cost,
@@ -278,21 +293,24 @@ def calculate_language_complexity(lang_dict):
     #     'nc': 1 + negation_cost,
     #     'nic': 1 + negation_cost
     # }
+    """
     homogeneity_cost = 1
     negation_cost = 1
     globality_cost = 1
+    binary_cost = 1
+    unary_cost = 1
     complexities = {
-        'not': negation_cost,
-        'and': 0,
-        'or': 0,
-        'nor': negation_cost,
-        'nand': globality_cost + negation_cost + homogeneity_cost,
-        'XOR': globality_cost + negation_cost + homogeneity_cost,
-        'bc': globality_cost + negation_cost + homogeneity_cost,
-        'c': globality_cost + negation_cost + homogeneity_cost,
-        'ic': globality_cost + negation_cost + homogeneity_cost,
-        'nc': negation_cost + homogeneity_cost,
-        'nic': negation_cost + homogeneity_cost
+        'not': unary_cost + negation_cost,
+        'and': binary_cost,
+        'or': binary_cost,
+        'nor': binary_cost + negation_cost,
+        'nand': binary_cost + globality_cost + negation_cost + homogeneity_cost,
+        'XOR': binary_cost + globality_cost + negation_cost + homogeneity_cost,
+        'bc': binary_cost + globality_cost + negation_cost + homogeneity_cost,
+        'c': binary_cost + globality_cost + negation_cost + homogeneity_cost,
+        'ic': binary_cost + globality_cost + negation_cost + homogeneity_cost,
+        'nc': binary_cost + negation_cost + homogeneity_cost,
+        'nic': binary_cost + negation_cost + homogeneity_cost
     }
     # complexities = {
     #     'not': 1,
